@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .asar import get_file, read_asar, replace_file
-from .models import ResetCredit
+from .models import ResetCredit, duplicate_title_counts
 
 
 DEFAULT_MACOS_ASAR = Path("/Applications/Codex.app/Contents/Resources/app.asar")
@@ -63,21 +63,24 @@ def patch_menu_chunk(chunk: str, credits: list[ResetCredit]) -> str:
 
 
 def _reset_credit_js(credits: list[ResetCredit]) -> str:
+    duplicate_counts = duplicate_title_counts(credits)
     rows = [
         {
+            "label": credit.menu_label(index, duplicate_counts[credit.title]),
             "title": credit.title,
             "status": credit.status,
             "expires_at": credit.expires_at,
             "reset_type": credit.reset_type,
+            "category": credit.category,
         }
-        for credit in credits
+        for index, credit in enumerate(credits, start=1)
         if credit.expires_at
     ]
     rows_json = json.dumps(rows, separators=(",", ":"))
     return (
         f'(()=>{{const __codexResetCredits={rows_json};'
         '/* reset-credit-expiry */'
-        'return __codexResetCredits.length?__codexResetCredits.map((e,t)=>(0,CV.jsx)(Xb.Item,{className:"text-base opacity-70",href:"#",onClick:e=>e.preventDefault(),children:(0,CV.jsxs)("span",{className:"flex items-center justify-between gap-3",children:[(0,CV.jsx)("span",{children:e.title||`Reset ${t+1}`}),(0,CV.jsx)("span",{className:"text-iconDefault",children:new Intl.DateTimeFormat(void 0,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}).format(new Date(e.expires_at))})]})},`reset-credit-expiry-${t}`)):null})()'
+        'return __codexResetCredits.length?__codexResetCredits.map((e,t)=>(0,CV.jsx)(Xb.Item,{className:"text-base opacity-70",href:"#",onClick:e=>e.preventDefault(),children:(0,CV.jsxs)("span",{className:"flex items-center justify-between gap-3",children:[(0,CV.jsx)("span",{children:e.label||e.title||`Reset ${t+1}`}),(0,CV.jsx)("span",{className:"text-iconDefault",children:new Intl.DateTimeFormat(void 0,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}).format(new Date(e.expires_at))})]})},`reset-credit-expiry-${t}`)):null})()'
     )
 
 

@@ -68,6 +68,7 @@ def print_reset_credits(data: dict[str, Any]) -> None:
             return
         for index, credit in enumerate(credits, start=1):
             print(f"  {index}. {credit.title} [{credit.status}]")
+            print(f"     category: {credit.category}")
             if credit.reset_type:
                 print(f"     type: {credit.reset_type}")
             print(f"     expires: {format_iso_datetime(credit.expires_at)}")
@@ -101,10 +102,10 @@ def print_reset_types(reset_credits: dict[str, Any]) -> None:
         print("No individual reset credits returned.")
         return
 
-    counts = Counter((credit.reset_type or "unknown", credit.title, credit.status) for credit in credits)
+    counts = Counter((credit.category, credit.reset_type or "unknown", credit.title, credit.status) for credit in credits)
     print("Reset credit types:")
-    for (reset_type, title, status), count in sorted(counts.items()):
-        print(f"- {reset_type}: {title} [{status}] x{count}")
+    for (category, reset_type, title, status), count in sorted(counts.items()):
+        print(f"- {category}: {reset_type}: {title} [{status}] x{count}")
 
 
 def dumps_json(data: dict[str, Any]) -> str:
@@ -124,4 +125,3 @@ def find_expiry_fields(value: Any, path: str = "") -> list[tuple[str, Any]]:
         for index, child in enumerate(value):
             matches.extend(find_expiry_fields(child, f"{path}[{index}]"))
     return matches
-

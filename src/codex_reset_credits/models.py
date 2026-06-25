@@ -24,7 +24,28 @@ class ResetCredit:
             reset_type=_optional_str(payload.get("reset_type")),
         )
 
+    @property
+    def category(self) -> str:
+        haystack = f"{self.title} {self.reset_type or ''}".lower()
+        if "partial" in haystack:
+            return "partial"
+        if "full" in haystack or "weekly" in haystack:
+            return "full"
+        return self.reset_type or "unknown"
+
+    def menu_label(self, index: int, duplicate_count: int) -> str:
+        base = self.title.split(" (", 1)[0].strip() or "Reset credit"
+        if duplicate_count > 1:
+            return f"{base} {index}"
+        return base
+
 
 def _optional_str(value: Any) -> str | None:
     return value if isinstance(value, str) and value else None
 
+
+def duplicate_title_counts(credits: list[ResetCredit]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for credit in credits:
+        counts[credit.title] = counts.get(credit.title, 0) + 1
+    return counts
