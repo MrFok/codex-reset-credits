@@ -20,15 +20,11 @@ show those reset-credit expiry rows in the app.
 - Shows available reset credits and individual expiry times.
 - Prints raw JSON for debugging or automation.
 - Groups reset credits by known type/title/status.
-- Can patch the Codex desktop menu so live expiry dates appear in "Usage
-  remaining".
-- Falls back to local session logs for basic usage-window data when the API is
-  unavailable.
 
 ## Requirements
 
 - Python 3.10 or newer
-- A local Codex auth file at `~/.codex/auth.json`
+- A local Codex auth file at `~/.codex/auth.json` (you should already have this)
 
 Run Codex desktop or Codex CLI login first if that auth file does not exist.
 
@@ -195,7 +191,7 @@ Do not print or log `~/.codex/auth.json`. `patch-app` no longer needs to read
 live reset-credit data at install time; it only modifies the local app bundle.
 Use `patch-app --dry-run` before modifying any Codex desktop `app.asar`.
 
-## Caveats
+## Notes
 
 - This uses private, undocumented ChatGPT backend endpoints. They may change.
 - The app patcher edits a bundled Electron asset. App updates can replace it.
