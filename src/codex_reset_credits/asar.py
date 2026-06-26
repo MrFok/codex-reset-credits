@@ -77,10 +77,11 @@ def replace_file(archive: AsarFile, archive_path: str, content: bytes) -> bytes:
                 file_metadata["offset"] = str(offset + delta)
 
     packed_header = _pack_header(archive.header)
-    if len(packed_header) != archive.data_offset:
-        raise ValueError("replacement changed asar header size; refusing to rewrite archive")
-
     return packed_header + archive.raw[archive.data_offset:old_start] + content + archive.raw[old_end:]
+
+
+def iter_file_paths(archive: AsarFile):
+    yield from _iter_file_paths(archive.header)
 
 
 def _pack_header(header: dict[str, Any]) -> bytes:
@@ -112,3 +113,17 @@ def _iter_file_metadata(node: dict[str, Any]):
     elif "size" in node:
         yield node
 
+
+def _iter_file_paths(node: dict[str, Any], prefix: str = ""):
+    files = node.get("files")
+    if not isinstance(files, dict):
+        return
+
+    for name, child in files.items():
+        if not isinstance(child, dict):
+            continue
+        path = f"{prefix}/{name}" if prefix else name
+        if "files" in child:
+            yield from _iter_file_paths(child, path)
+        elif "offset" in child and "size" in child:
+            yield path
