@@ -37,8 +37,36 @@ codex-reset-credits status
 Without installing:
 
 ```bash
-python3 -m codex_reset_credits.cli status
+PYTHONPATH=src python3 -m codex_reset_credits.cli status
 ```
+
+## For Agents
+
+Use a local virtual environment and keep the install editable so follow-up agents
+can inspect and modify the package without guessing import paths:
+
+```bash
+git clone https://github.com/MrFok/codex-reset-credits.git
+cd codex-reset-credits
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install -U pip
+python -m pip install -e .
+codex-reset-credits --help
+codex-reset-credits status
+```
+
+If you cannot install packages in the current environment, run from source:
+
+```bash
+cd codex-reset-credits
+PYTHONPATH=src python3 -m codex_reset_credits.cli status
+PYTHONPATH=src python3 -m unittest discover -s tests
+```
+
+Do not print or log `~/.codex/auth.json`. The CLI reads the local
+`tokens.access_token` and sends it only as an HTTP `Authorization` header.
+Use `patch-app --dry-run` before modifying any Codex desktop `app.asar`.
 
 ## Auth
 
