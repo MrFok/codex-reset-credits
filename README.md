@@ -1,14 +1,18 @@
 # codex-reset-credits
 
-See your Codex usage windows and reset-credit expiration times from the command
+did you know your reset credits have expiration dates? 
+
+see your Codex usage windows and reset-credit expiration times from the command
 line.
+
+why aren't they shown natively? no clue, but until it's addressed you can use this
+
+![Codex reset credits demo](public/demo_img.png)
 
 `codex-reset-credits` is a small Python tool for checking how many Codex reset
 credits are available, when each credit expires, and when the current usage
 windows reset. It can also patch the Codex desktop "Usage remaining" menu to
 show those reset-credit expiry rows in the app.
-
-![Codex reset credits demo](public/demo_img.png)
 
 ## Features
 
