@@ -111,6 +111,11 @@ reuse Codex desktop's authenticated API client to request
 `/wham/rate-limit-reset-credits` and populate from the current response. If that
 request fails, the extra reset rows stay hidden.
 
+The in-app fetcher caches the last successful reset-credit response so the rows
+render immediately on later menu opens. It refreshes on first load, shortly
+before the earliest credit expiry, and after the native reset-credit menu item is
+clicked.
+
 Always dry-run first:
 
 ```bash

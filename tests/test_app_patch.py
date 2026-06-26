@@ -70,9 +70,16 @@ class AppPatchTests(unittest.TestCase):
         self.assertNotIn("https://chatgpt.com/backend-api/wham/rate-limit-reset-credits", patched)
         self.assertNotIn('credentials:"include"', patched)
         self.assertIn('style:{display:"none"}', patched)
-        self.assertIn('window.addEventListener("focus"', patched)
-        self.assertIn('document.addEventListener("visibilitychange"', patched)
-        self.assertIn("[0,1e3,3e3,1e4]", patched)
+        self.assertIn("__codexResetCreditCacheKey", patched)
+        self.assertIn("__codexResetCreditScheduleExpiry", patched)
+        self.assertIn("__codexResetCreditBindNativeClick", patched)
+        self.assertIn("__codexResetCreditInvalidate", patched)
+        self.assertNotIn('window.addEventListener("focus"', patched)
+        self.assertNotIn('document.addEventListener("visibilitychange"', patched)
+        self.assertNotIn("[0,1e3,3e3,1e4]", patched)
+        self.assertIn("rows.forEach((row,index)=>{let credit=credits[index];", patched)
+        self.assertIn("__codexResetCreditRender(response)", patched)
+        self.assertNotIn("response.forEach", patched)
         self.assertNotIn("2026-07-18T00:31:22.905095Z", patched)
 
     def test_patch_menu_chunk_supports_updated_bundle_symbols(self) -> None:
@@ -92,7 +99,10 @@ class AppPatchTests(unittest.TestCase):
     def test_patch_menu_chunk_hides_rows_when_refresh_fails(self) -> None:
         patched = patch_menu_chunk("[" + _needle() + "]")
 
-        self.assertIn("catch(()=>e.forEach(__codexResetCreditHide))", patched)
+        self.assertIn(
+            "catch(()=>cachedResponse?__codexResetCreditRender(cachedResponse):rows.forEach(__codexResetCreditHide))",
+            patched,
+        )
 
     def test_patch_menu_chunk_replaces_existing_patch(self) -> None:
         first = patch_menu_chunk("[" + _needle() + "]")
@@ -128,8 +138,8 @@ class AppPatchTests(unittest.TestCase):
     def test_patch_menu_chunk_keeps_different_credit_titles_dynamic(self) -> None:
         patched = patch_menu_chunk("[" + _needle() + "]")
 
-        self.assertIn('e.title||"Reset credit"', patched)
-        self.assertIn('n[r]>1?`${i} ${t+1}`:i', patched)
+        self.assertIn('credit.title||"Reset credit"', patched)
+        self.assertIn('titleCounts[title]>1?`${label} ${index+1}`:label', patched)
 
 
 def _needle(index: int = 0) -> str:
