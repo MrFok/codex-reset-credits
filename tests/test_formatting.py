@@ -1,6 +1,7 @@
 import unittest
 
 from codex_reset_credits.formatting import format_duration, parse_iso_datetime
+from codex_reset_credits.models import ResetCredit
 
 
 class FormattingTests(unittest.TestCase):
@@ -13,6 +14,15 @@ class FormattingTests(unittest.TestCase):
         self.assertIsNotNone(parsed)
         assert parsed is not None
         self.assertEqual(parsed.utcoffset().total_seconds(), 0)
+
+
+class ResetCreditModelTests(unittest.TestCase):
+    def test_category_detects_full_and_partial_titles(self) -> None:
+        full = ResetCredit(None, "Full reset (Weekly + 5 hr)", "available", None, None, "codex_rate_limits")
+        partial = ResetCredit(None, "Partial reset (5 hr)", "available", None, None, "codex_rate_limits_partial")
+
+        self.assertEqual(full.category, "full")
+        self.assertEqual(partial.category, "partial")
 
 
 if __name__ == "__main__":

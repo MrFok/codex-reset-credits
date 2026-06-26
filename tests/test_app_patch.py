@@ -11,6 +11,7 @@ class AppPatchTests(unittest.TestCase):
         self.assertIn("reset-credit-expiry", patched)
         self.assertIn("(()=>{const __codexResetCredits=", patched)
         self.assertIn("Full reset", patched)
+        self.assertIn('"category":"full"', patched)
 
     def test_patch_menu_chunk_replaces_existing_patch(self) -> None:
         first = patch_menu_chunk("[" + _needle() + "]", [_credit("First")])

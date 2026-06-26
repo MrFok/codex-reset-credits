@@ -130,6 +130,10 @@ Show only known reset-credit types/titles:
 codex-reset-credits types
 ```
 
+The `types` command groups credits by category, endpoint `reset_type`, title, and
+status. Current observed credits are `full` resets, but the classifier keeps
+future `partial` reset credits separate if the endpoint starts returning them.
+
 Patch the Codex desktop menu from the current live reset-credit data:
 
 ```bash
