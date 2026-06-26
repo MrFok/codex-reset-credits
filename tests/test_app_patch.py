@@ -2,7 +2,13 @@ import unittest
 from pathlib import Path
 
 from codex_reset_credits.asar import AsarFile, iter_file_paths
-from codex_reset_credits.app_patch import _reset_row_needles, find_menu_chunk_path, patch_menu_chunk
+from codex_reset_credits.app_patch import (
+    ResetCreditApiClient,
+    _reset_row_needles,
+    find_menu_chunk_path,
+    find_reset_credit_api_client,
+    patch_menu_chunk,
+)
 
 
 class AppPatchTests(unittest.TestCase):
@@ -39,12 +45,30 @@ class AppPatchTests(unittest.TestCase):
 
         self.assertEqual(list(iter_file_paths(archive)), ["webview/assets/app.js"])
 
+    def test_find_reset_credit_api_client_uses_exported_codex_client(self) -> None:
+        archive = _archive_with_files(
+            {
+                "webview/assets/menu.js": b"composer.mode.rateLimit.resetsAvailable onRateLimitResetClick h>0?",
+                "webview/assets/api-hash.js": (
+                    b"function RSt(){return HM.safeGet(`/wham/rate-limit-reset-credits`)}"
+                    b"export{HM as PA,LSt as Sc};"
+                ),
+            }
+        )
+
+        self.assertEqual(
+            find_reset_credit_api_client(archive, "webview/assets/menu.js"),
+            ResetCreditApiClient("./api-hash.js", "PA"),
+        )
+
     def test_patch_menu_chunk_inserts_expression(self) -> None:
         patched = patch_menu_chunk("[" + _needle() + "]")
 
         self.assertIn("reset-credit-expiry", patched)
-        self.assertIn("/backend-api/wham/rate-limit-reset-credits", patched)
-        self.assertIn('credentials:"include"', patched)
+        self.assertIn('import(new URL(__codexResetCreditModule,import.meta.url).href)', patched)
+        self.assertIn('.safeGet("/wham/rate-limit-reset-credits")', patched)
+        self.assertNotIn("https://chatgpt.com/backend-api/wham/rate-limit-reset-credits", patched)
+        self.assertNotIn('credentials:"include"', patched)
         self.assertIn('style:{display:"none"}', patched)
         self.assertIn('window.addEventListener("focus"', patched)
         self.assertIn('document.addEventListener("visibilitychange"', patched)
@@ -58,6 +82,13 @@ class AppPatchTests(unittest.TestCase):
         self.assertIn("(0,X.jsx)(m.Item", patched)
         self.assertIn("className:n(D&&", patched)
 
+    def test_patch_menu_chunk_supports_current_bundle_symbols(self) -> None:
+        patched = patch_menu_chunk("[" + _needle(3) + "]")
+
+        self.assertIn("Array.from({length:h}", patched)
+        self.assertIn("(0,mG.jsx)(qd.Item", patched)
+        self.assertIn("className:H(x&&", patched)
+
     def test_patch_menu_chunk_hides_rows_when_refresh_fails(self) -> None:
         patched = patch_menu_chunk("[" + _needle() + "]")
 
@@ -67,7 +98,7 @@ class AppPatchTests(unittest.TestCase):
         first = patch_menu_chunk("[" + _needle() + "]")
         second = patch_menu_chunk(first)
 
-        self.assertEqual(second.count("(()=>{const __codexResetCreditEndpoint="), 1)
+        self.assertEqual(second.count("(()=>{const __codexResetCreditModule="), 1)
 
     def test_patch_menu_chunk_replaces_static_snapshot_patch(self) -> None:
         static_patch = (
@@ -78,7 +109,7 @@ class AppPatchTests(unittest.TestCase):
 
         patched = patch_menu_chunk("[" + _needle() + "," + static_patch + "]")
 
-        self.assertIn("/backend-api/wham/rate-limit-reset-credits", patched)
+        self.assertIn('.safeGet("/wham/rate-limit-reset-credits")', patched)
         self.assertNotIn("__codexResetCredits=[", patched)
         self.assertNotIn("2026-07-18T00:31:22.905095Z", patched)
 
@@ -91,7 +122,7 @@ class AppPatchTests(unittest.TestCase):
 
         patched = patch_menu_chunk("[" + _needle() + "," + legacy_patch + "]}):null")
 
-        self.assertIn("/backend-api/wham/rate-limit-reset-credits", patched)
+        self.assertIn('.safeGet("/wham/rate-limit-reset-credits")', patched)
         self.assertNotIn("2026-07-12T01:30:38.263724Z", patched)
 
     def test_patch_menu_chunk_keeps_different_credit_titles_dynamic(self) -> None:

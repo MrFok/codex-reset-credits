@@ -107,9 +107,9 @@ codex-reset-credits patch-app
 
 The patch installs a live in-app fetcher. It does not bake the current reset
 credits into the bundle; when Codex renders the usage menu, the injected rows
-request `/backend-api/wham/rate-limit-reset-credits` with the app session and
-populate from the current response. If that request fails, the extra reset rows
-stay hidden.
+reuse Codex desktop's authenticated API client to request
+`/wham/rate-limit-reset-credits` and populate from the current response. If that
+request fails, the extra reset rows stay hidden.
 
 Always dry-run first:
 

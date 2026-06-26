@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import posixpath
+import re
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
@@ -14,8 +16,10 @@ MENU_CHUNK_COMPONENT_MARKERS = ("onRateLimitResetClick", "h>0?")
 PATCH_MARKER = "reset-credit-expiry"
 PATCH_STARTS = (
     "(()=>{const __codexResetCreditEndpoint=",
+    "(()=>{const __codexResetCreditModule=",
     "(()=>{const __codexResetCredits=",
 )
+RESET_CREDITS_ROUTE = "/wham/rate-limit-reset-credits"
 
 
 @dataclass(frozen=True)
@@ -36,6 +40,12 @@ class MenuNeedle:
     classnames: str
 
 
+@dataclass(frozen=True)
+class ResetCreditApiClient:
+    module_path: str
+    client_export: str
+
+
 def patch_usage_menu(
     asar_path: Path,
     backup_path: Path | None = None,
@@ -43,8 +53,9 @@ def patch_usage_menu(
 ) -> PatchResult:
     archive = read_asar(asar_path)
     menu_chunk_path = find_menu_chunk_path(archive)
+    api_client = find_reset_credit_api_client(archive, menu_chunk_path)
     chunk = get_file(archive, menu_chunk_path).decode("utf-8")
-    patched = patch_menu_chunk(chunk)
+    patched = patch_menu_chunk(chunk, api_client=api_client)
     changed = patched != chunk
 
     if not changed or dry_run:
@@ -81,6 +92,42 @@ def find_menu_chunk_path(archive: AsarFile) -> str:
     raise ValueError(f"found multiple candidate Codex usage menu chunks: {', '.join(matches)}")
 
 
+def find_reset_credit_api_client(archive: AsarFile, menu_chunk_path: str) -> ResetCreditApiClient:
+    matches = []
+    route = RESET_CREDITS_ROUTE.encode("utf-8")
+    for path in iter_file_paths(archive):
+        if not path.startswith("webview/assets/") or not path.endswith(".js"):
+            continue
+        content = get_file(archive, path)
+        if route not in content or b"safeGet" not in content or b"export{" not in content:
+            continue
+        text = content.decode("utf-8", errors="replace")
+        client_match = re.search(
+            rf"\b([A-Za-z_$][\w$]*)\.safeGet\(`{re.escape(RESET_CREDITS_ROUTE)}`\)",
+            text,
+        )
+        if client_match is None:
+            continue
+        client_name = client_match.group(1)
+        export_match = re.search(rf"\b{re.escape(client_name)} as ([A-Za-z_$][\w$]*)\b", text)
+        if export_match:
+            matches.append(ResetCreditApiClient(_relative_module_path(menu_chunk_path, path), export_match.group(1)))
+
+    if len(matches) == 1:
+        return matches[0]
+    if not matches:
+        raise KeyError(f"could not find Codex reset-credit API client containing {RESET_CREDITS_ROUTE!r}")
+    paths = ", ".join(match.module_path for match in matches)
+    raise ValueError(f"found multiple candidate Codex reset-credit API clients: {paths}")
+
+
+def _relative_module_path(from_path: str, to_path: str) -> str:
+    relative = posixpath.relpath(to_path, posixpath.dirname(from_path))
+    if not relative.startswith("."):
+        relative = f"./{relative}"
+    return relative
+
+
 def _is_menu_chunk(content: bytes) -> bool:
     if PATCH_MARKER.encode("utf-8") in content:
         return True
@@ -89,7 +136,11 @@ def _is_menu_chunk(content: bytes) -> bool:
     return all(marker.encode("utf-8") in content for marker in MENU_CHUNK_COMPONENT_MARKERS)
 
 
-def patch_menu_chunk(chunk: str) -> str:
+def patch_menu_chunk(
+    chunk: str,
+    api_client: ResetCreditApiClient | None = None,
+) -> str:
+    api_client = api_client or ResetCreditApiClient("./reset-credit-api.js", "apiClient")
     if PATCH_MARKER in chunk:
         needle = _needle_for_chunk(chunk)
         if needle is None:
@@ -98,12 +149,12 @@ def patch_menu_chunk(chunk: str) -> str:
         if span is None:
             raise ValueError("found previous patch marker but could not locate patch block")
         start, end = span
-        replacement = _reset_credit_js(needle)
+        replacement = _reset_credit_js(needle, api_client)
         return chunk[:start] + replacement + chunk[end:]
 
     for needle in _reset_row_needles():
         if needle.text in chunk:
-            return chunk.replace(needle.text, needle.text + "," + _reset_credit_js(needle), 1)
+            return chunk.replace(needle.text, needle.text + "," + _reset_credit_js(needle, api_client), 1)
     raise ValueError("could not find Codex usage reset menu item in app chunk")
 
 
@@ -135,17 +186,19 @@ def _needle_for_chunk(chunk: str) -> MenuNeedle | None:
     return None
 
 
-def _reset_credit_js(needle: MenuNeedle) -> str:
+def _reset_credit_js(needle: MenuNeedle, api_client: ResetCreditApiClient) -> str:
     return (
-        '(()=>{const __codexResetCreditEndpoint="/backend-api/wham/rate-limit-reset-credits",'
+        f'(()=>{{const __codexResetCreditModule="{api_client.module_path}",'
+        f'__codexResetCreditClientExport="{api_client.client_export}",'
         '__codexResetCreditRowsKey="__codexResetCreditRows",'
         '__codexResetCreditTimerKey="__codexResetCreditTimer";'
         '/* reset-credit-expiry */'
         'function __codexResetCreditHide(e){e&&(e.style.display="none");let t=e?.closest?.("[data-codex-reset-credit-row]")||e?.parentElement;t&&(t.style.display="none")}'
         'function __codexResetCreditShow(e){e&&(e.style.display="");let t=e?.closest?.("[data-codex-reset-credit-row]")||e?.parentElement;t&&(t.style.display="")}'
         'function __codexResetCreditLabel(e,t,n){let r=e.title||"Reset credit",i=(r.split(" (",1)[0]||"Reset credit").trim();return n[r]>1?`${i} ${t+1}`:i}'
+        'function __codexResetCreditFetch(){return import(new URL(__codexResetCreditModule,import.meta.url).href).then(e=>e[__codexResetCreditClientExport].safeGet("/wham/rate-limit-reset-credits"))}'
         'function __codexResetCreditRefresh(){let e=(window[__codexResetCreditRowsKey]||[]).filter(Boolean);'
-        'if(!e.length)return;fetch(__codexResetCreditEndpoint,{credentials:"include"}).then(e=>e.ok?e.json():null).then(t=>{'
+        'if(!e.length)return;__codexResetCreditFetch().then(t=>{'
         'let n=Array.isArray(t?.credits)?t.credits.filter(e=>e&&e.expires_at):[],r={};'
         'n.forEach(e=>{let t=e.title||"Reset credit";r[t]=(r[t]||0)+1}),e.forEach((e,t)=>{let i=n[t];'
         'if(!i){__codexResetCreditHide(e);return}let c=e.querySelector("[data-codex-reset-credit-label]"),l=e.querySelector("[data-codex-reset-credit-expiry]");'
@@ -181,4 +234,12 @@ def _reset_row_needles() -> tuple[MenuNeedle, ...]:
         item="m.Item",
         classnames="n",
     )
-    return (current, previous, updated)
+    current_updated = MenuNeedle(
+        text='h>0?(0,mG.jsx)(qd.Item,{RightIcon:ca,className:H(x&&`pl-[calc(var(--padding-row-x)+1.25rem)] pr-[var(--padding-row-x)]`),onClick:c,children:(0,mG.jsx)(X,{id:`composer.mode.rateLimit.resetsAvailable`,defaultMessage:`{availableRateLimitResetCount, plural, one {# reset available} other {# resets available}}`,description:`Menu item for opening available rate limit resets`,values:{availableRateLimitResetCount:h}})}):null',
+        credit_count="h",
+        compact="x",
+        jsx="mG",
+        item="qd.Item",
+        classnames="H",
+    )
+    return (current, previous, updated, current_updated)
