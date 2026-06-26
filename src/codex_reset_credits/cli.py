@@ -12,7 +12,6 @@ from .api import (
     merge_status,
     newest_session_rate_limits,
     normalize_log_rate_limits,
-    reset_credit_objects,
 )
 from .app_patch import DEFAULT_MACOS_ASAR, patch_usage_menu
 from .auth import DEFAULT_AUTH_PATH
@@ -91,15 +90,13 @@ def _types(args: argparse.Namespace) -> int:
 
 
 def _patch_app(args: argparse.Namespace) -> int:
-    reset_credits = fetch_reset_credits(args.auth, args.reset_credits_url, args.timeout)
-    credits = reset_credit_objects(reset_credits)
-    result = patch_usage_menu(args.asar, credits, backup_path=args.backup, dry_run=args.dry_run)
+    result = patch_usage_menu(args.asar, backup_path=args.backup, dry_run=args.dry_run)
 
     action = "would update" if result.dry_run and result.changed else "updated"
     if not result.changed:
         action = "already up to date"
     print(f"{action}: {result.asar_path}")
-    print(f"reset credits rendered: {result.credit_count}")
+    print("reset credits rendered: live in Codex desktop")
     if result.backup_path:
         print(f"backup: {result.backup_path}")
     if result.dry_run:
@@ -109,4 +106,3 @@ def _patch_app(args: argparse.Namespace) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
