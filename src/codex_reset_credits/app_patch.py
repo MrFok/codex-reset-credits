@@ -250,4 +250,12 @@ def _reset_row_needles() -> tuple[MenuNeedle, ...]:
         item="qd.Item",
         classnames="H",
     )
-    return (current, previous, updated, current_updated)
+    remote_conversation = MenuNeedle(
+        text='h>0?(0,Q.jsx)(k.Item,{RightIcon:pt,className:q(x&&`pl-[calc(var(--padding-row-x)+1.25rem)] pr-[var(--padding-row-x)]`),onClick:c,children:(0,Q.jsx)(D,{id:`composer.mode.rateLimit.resetsAvailable`,defaultMessage:`{availableRateLimitResetCount, plural, one {# reset available} other {# resets available}}`,description:`Menu item for opening available rate limit resets`,values:{availableRateLimitResetCount:h}})}):null',
+        credit_count="h",
+        compact="x",
+        jsx="Q",
+        item="k.Item",
+        classnames="q",
+    )
+    return (current, previous, updated, current_updated, remote_conversation)

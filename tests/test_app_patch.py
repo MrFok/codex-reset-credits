@@ -96,6 +96,13 @@ class AppPatchTests(unittest.TestCase):
         self.assertIn("(0,mG.jsx)(qd.Item", patched)
         self.assertIn("className:H(x&&", patched)
 
+    def test_patch_menu_chunk_supports_remote_conversation_bundle_symbols(self) -> None:
+        patched = patch_menu_chunk("[" + _needle(4) + "]")
+
+        self.assertIn("Array.from({length:h}", patched)
+        self.assertIn("(0,Q.jsx)(k.Item", patched)
+        self.assertIn("className:q(x&&", patched)
+
     def test_patch_menu_chunk_hides_rows_when_refresh_fails(self) -> None:
         patched = patch_menu_chunk("[" + _needle() + "]")
 
