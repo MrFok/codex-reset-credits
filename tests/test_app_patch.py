@@ -39,6 +39,29 @@ class AppPatchTests(unittest.TestCase):
 
         self.assertEqual(find_menu_chunk_path(archive), "webview/assets/app-initial~app-main~thread.js")
 
+    def test_find_menu_chunk_path_supports_short_reset_message_marker(self) -> None:
+        archive = _archive_with_files(
+            {
+                "webview/assets/fr-FR.js": b"resetsAvailable availableRateLimitResetCount",
+                "webview/assets/app-initial~app-main~thread.js": (
+                    b"resetsAvailable availableRateLimitResetCount onRateLimitResetClick C>0?"
+                ),
+            }
+        )
+
+        self.assertEqual(find_menu_chunk_path(archive), "webview/assets/app-initial~app-main~thread.js")
+
+    def test_find_menu_chunk_path_uses_fallback_when_old_marker_lacks_old_shape(self) -> None:
+        archive = _archive_with_files(
+            {
+                "webview/assets/app-initial~app-main~thread.js": (
+                    b"composer.mode.rateLimit.resetsAvailable availableRateLimitResetCount onRateLimitResetClick C>0?"
+                ),
+            }
+        )
+
+        self.assertEqual(find_menu_chunk_path(archive), "webview/assets/app-initial~app-main~thread.js")
+
     def test_iter_file_paths_skips_metadata_without_payload(self) -> None:
         archive = _archive_with_files({"webview/assets/app.js": b"console.log(1)"})
         archive.header["files"]["webview"]["files"]["assets"]["files"]["virtual.js"] = {"size": 10}
@@ -102,6 +125,13 @@ class AppPatchTests(unittest.TestCase):
         self.assertIn("Array.from({length:h}", patched)
         self.assertIn("(0,Q.jsx)(k.Item", patched)
         self.assertIn("className:q(x&&", patched)
+
+    def test_patch_menu_chunk_supports_thread_shell_bundle_symbols(self) -> None:
+        patched = patch_menu_chunk("[" + _needle(5) + "]")
+
+        self.assertIn("Array.from({length:C}", patched)
+        self.assertIn("(0,X.jsx)(b.Item", patched)
+        self.assertIn("className:h(A&&", patched)
 
     def test_patch_menu_chunk_hides_rows_when_refresh_fails(self) -> None:
         patched = patch_menu_chunk("[" + _needle() + "]")

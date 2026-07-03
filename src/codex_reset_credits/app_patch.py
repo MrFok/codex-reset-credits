@@ -12,7 +12,9 @@ from .asar import AsarFile, get_file, iter_file_paths, read_asar, replace_file
 DEFAULT_MACOS_ASAR = Path("/Applications/Codex.app/Contents/Resources/app.asar")
 MENU_CHUNK_PATH = "webview/assets/app-initial~app-main~automations-page-jUgL0rhh.js"
 MENU_CHUNK_MARKER = "composer.mode.rateLimit.resetsAvailable"
+MENU_CHUNK_FALLBACK_MARKER = "resetsAvailable"
 MENU_CHUNK_COMPONENT_MARKERS = ("onRateLimitResetClick", "h>0?")
+MENU_CHUNK_FALLBACK_COMPONENT_MARKERS = ("onRateLimitResetClick", "availableRateLimitResetCount")
 PATCH_MARKER = "reset-credit-expiry"
 PATCH_STARTS = (
     "(()=>{const __codexResetCreditEndpoint=",
@@ -131,9 +133,13 @@ def _relative_module_path(from_path: str, to_path: str) -> str:
 def _is_menu_chunk(content: bytes) -> bool:
     if PATCH_MARKER.encode("utf-8") in content:
         return True
-    if MENU_CHUNK_MARKER.encode("utf-8") not in content:
-        return False
-    return all(marker.encode("utf-8") in content for marker in MENU_CHUNK_COMPONENT_MARKERS)
+    has_current_marker = MENU_CHUNK_MARKER.encode("utf-8") in content
+    has_fallback_marker = MENU_CHUNK_FALLBACK_MARKER.encode("utf-8") in content
+    has_current_component = all(marker.encode("utf-8") in content for marker in MENU_CHUNK_COMPONENT_MARKERS)
+    has_fallback_component = all(
+        marker.encode("utf-8") in content for marker in MENU_CHUNK_FALLBACK_COMPONENT_MARKERS
+    )
+    return (has_current_marker and has_current_component) or (has_fallback_marker and has_fallback_component)
 
 
 def patch_menu_chunk(
@@ -258,4 +264,12 @@ def _reset_row_needles() -> tuple[MenuNeedle, ...]:
         item="k.Item",
         classnames="q",
     )
-    return (current, previous, updated, current_updated, remote_conversation)
+    thread_shell = MenuNeedle(
+        text='C>0?(0,X.jsx)(b.Item,{RightIcon:l,className:h(A&&`pl-[calc(var(--padding-row-x)+1.25rem)] pr-[var(--padding-row-x)]`),onClick:u,children:(0,X.jsx)(n,{id:`composer.mode.rateLimit.resetsAvailable`,defaultMessage:`{availableRateLimitResetCount, plural, one {# reset available} other {# resets available}}`,description:`Menu item for opening available rate limit resets`,values:{availableRateLimitResetCount:C}})}):null',
+        credit_count="C",
+        compact="A",
+        jsx="X",
+        item="b.Item",
+        classnames="h",
+    )
+    return (current, previous, updated, current_updated, remote_conversation, thread_shell)
