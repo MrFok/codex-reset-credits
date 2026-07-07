@@ -133,6 +133,13 @@ class AppPatchTests(unittest.TestCase):
         self.assertIn("(0,X.jsx)(b.Item", patched)
         self.assertIn("className:h(A&&", patched)
 
+    def test_patch_menu_chunk_supports_keyboard_shortcuts_bundle_symbols(self) -> None:
+        patched = patch_menu_chunk("[" + _needle(6) + "]")
+
+        self.assertIn("Array.from({length:h}", patched)
+        self.assertIn("(0,K.jsx)(F.Item", patched)
+        self.assertIn("className:L(x&&", patched)
+
     def test_patch_menu_chunk_hides_rows_when_refresh_fails(self) -> None:
         patched = patch_menu_chunk("[" + _needle() + "]")
 
