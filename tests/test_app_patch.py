@@ -155,6 +155,7 @@ class AppPatchTests(unittest.TestCase):
         )
 
         self.assertIn('"expires_at":"2026-07-31T19:52:32Z"', patched)
+        self.assertIn("fallback&&!window[__codexResetCreditCacheKey]&&(window[__codexResetCreditCacheKey]=fallback)", patched)
         self.assertIn("fallback&&__codexResetCreditRender(fallback)", patched)
 
     def test_patch_menu_chunk_hides_rows_when_refresh_fails(self) -> None:
