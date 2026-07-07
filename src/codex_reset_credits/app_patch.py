@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import json
 import posixpath
 import re
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from .asar import AsarFile, get_file, iter_file_paths, read_asar, replace_file
 
@@ -52,12 +54,13 @@ def patch_usage_menu(
     asar_path: Path,
     backup_path: Path | None = None,
     dry_run: bool = False,
+    reset_credit_fallback: dict[str, Any] | None = None,
 ) -> PatchResult:
     archive = read_asar(asar_path)
     menu_chunk_path = find_menu_chunk_path(archive)
     api_client = find_reset_credit_api_client(archive, menu_chunk_path)
     chunk = get_file(archive, menu_chunk_path).decode("utf-8")
-    patched = patch_menu_chunk(chunk, api_client=api_client)
+    patched = patch_menu_chunk(chunk, api_client=api_client, reset_credit_fallback=reset_credit_fallback)
     changed = patched != chunk
 
     if not changed or dry_run:
@@ -145,6 +148,7 @@ def _is_menu_chunk(content: bytes) -> bool:
 def patch_menu_chunk(
     chunk: str,
     api_client: ResetCreditApiClient | None = None,
+    reset_credit_fallback: dict[str, Any] | None = None,
 ) -> str:
     api_client = api_client or ResetCreditApiClient("./reset-credit-api.js", "apiClient")
     if PATCH_MARKER in chunk:
@@ -155,12 +159,16 @@ def patch_menu_chunk(
         if span is None:
             raise ValueError("found previous patch marker but could not locate patch block")
         start, end = span
-        replacement = _reset_credit_js(needle, api_client)
+        replacement = _reset_credit_js(needle, api_client, reset_credit_fallback=reset_credit_fallback)
         return chunk[:start] + replacement + chunk[end:]
 
     for needle in _reset_row_needles():
         if needle.text in chunk:
-            return chunk.replace(needle.text, needle.text + "," + _reset_credit_js(needle, api_client), 1)
+            return chunk.replace(
+                needle.text,
+                needle.text + "," + _reset_credit_js(needle, api_client, reset_credit_fallback=reset_credit_fallback),
+                1,
+            )
     raise ValueError("could not find Codex usage reset menu item in app chunk")
 
 
@@ -192,10 +200,16 @@ def _needle_for_chunk(chunk: str) -> MenuNeedle | None:
     return None
 
 
-def _reset_credit_js(needle: MenuNeedle, api_client: ResetCreditApiClient) -> str:
+def _reset_credit_js(
+    needle: MenuNeedle,
+    api_client: ResetCreditApiClient,
+    reset_credit_fallback: dict[str, Any] | None = None,
+) -> str:
+    fallback_json = json.dumps(reset_credit_fallback, separators=(",", ":")) if reset_credit_fallback else "null"
     return (
         f'(()=>{{const __codexResetCreditModule="{api_client.module_path}",'
         f'__codexResetCreditClientExport="{api_client.client_export}",'
+        f"__codexResetCreditFallback={fallback_json},"
         '__codexResetCreditRowsKey="__codexResetCreditRows",'
         '__codexResetCreditTimerKey="__codexResetCreditTimer",'
         '__codexResetCreditExpiryTimerKey="__codexResetCreditExpiryTimer",'
@@ -221,7 +235,7 @@ def _reset_credit_js(needle: MenuNeedle, api_client: ResetCreditApiClient) -> st
         'function __codexResetCreditInvalidate(){delete window[__codexResetCreditCacheKey],[1e3,3e3,1e4].forEach(delay=>setTimeout(()=>__codexResetCreditRefresh(!0),delay))}'
         'function __codexResetCreditBindNativeClick(item){let nativeResetItem=item?.previousElementSibling;nativeResetItem&&!nativeResetItem.__codexResetCreditClickBound&&(nativeResetItem.__codexResetCreditClickBound=!0,nativeResetItem.addEventListener("click",__codexResetCreditInvalidate,!0))}'
         'window.__codexResetCreditsRefresh=()=>__codexResetCreditRefresh(!0);'
-        f'return Array.from({{length:{needle.credit_count}}},(unused,index)=>(0,{needle.jsx}.jsx)({needle.item},{{className:{needle.classnames}({needle.compact}&&`pl-[calc(var(--padding-row-x)+1.25rem)] pr-[var(--padding-row-x)]`),disabled:!0,style:{{display:"none"}},"data-codex-reset-credit-row":!0,children:(0,{needle.jsx}.jsxs)("span",{{className:"flex w-full items-center justify-between gap-4",style:{{display:"none"}},ref:row=>{{if(row){{(window[__codexResetCreditRowsKey]||(window[__codexResetCreditRowsKey]=[]))[index]=row;let item=row.closest?.("[data-codex-reset-credit-row]")||row.parentElement;__codexResetCreditBindNativeClick(item),window[__codexResetCreditCacheKey]&&__codexResetCreditRender(window[__codexResetCreditCacheKey]),__codexResetCreditSchedule(!1)}}}},children:[(0,{needle.jsx}.jsx)("span",{{"data-codex-reset-credit-label":!0,children:`Reset ${{index+1}}`}}),(0,{needle.jsx}.jsx)("span",{{"data-codex-reset-credit-expiry":!0,className:"text-token-input-placeholder-foreground whitespace-nowrap",children:""}})]}})}},`reset-credit-expiry-${{index}}`))}})()'
+        f'return Array.from({{length:Math.max({needle.credit_count},__codexResetCreditFallback?.credits?.length||0)}},(unused,index)=>(0,{needle.jsx}.jsx)({needle.item},{{className:{needle.classnames}({needle.compact}&&`pl-[calc(var(--padding-row-x)+1.25rem)] pr-[var(--padding-row-x)]`),disabled:!0,style:{{display:"none"}},"data-codex-reset-credit-row":!0,children:(0,{needle.jsx}.jsxs)("span",{{className:"flex w-full items-center justify-between gap-4",style:{{display:"none"}},ref:row=>{{if(row){{(window[__codexResetCreditRowsKey]||(window[__codexResetCreditRowsKey]=[]))[index]=row;let item=row.closest?.("[data-codex-reset-credit-row]")||row.parentElement,fallback=window[__codexResetCreditCacheKey]||__codexResetCreditFallback;__codexResetCreditBindNativeClick(item),fallback&&__codexResetCreditRender(fallback),__codexResetCreditSchedule(!1)}}}},children:[(0,{needle.jsx}.jsx)("span",{{"data-codex-reset-credit-label":!0,children:`Reset ${{index+1}}`}}),(0,{needle.jsx}.jsx)("span",{{"data-codex-reset-credit-expiry":!0,className:"text-token-input-placeholder-foreground whitespace-nowrap",children:""}})]}})}},`reset-credit-expiry-${{index}}`))}})()'
     )
 
 

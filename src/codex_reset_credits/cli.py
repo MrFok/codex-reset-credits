@@ -90,13 +90,27 @@ def _types(args: argparse.Namespace) -> int:
 
 
 def _patch_app(args: argparse.Namespace) -> int:
-    result = patch_usage_menu(args.asar, backup_path=args.backup, dry_run=args.dry_run)
+    reset_credit_fallback = None
+    try:
+        reset_credit_fallback = fetch_reset_credits(args.auth, args.reset_credits_url, args.timeout)
+    except Exception as exc:
+        print(f"reset-credit fallback unavailable: {exc}", file=sys.stderr)
+
+    result = patch_usage_menu(
+        args.asar,
+        backup_path=args.backup,
+        dry_run=args.dry_run,
+        reset_credit_fallback=reset_credit_fallback,
+    )
 
     action = "would update" if result.dry_run and result.changed else "updated"
     if not result.changed:
         action = "already up to date"
     print(f"{action}: {result.asar_path}")
     print("reset credits rendered: live in Codex desktop")
+    if reset_credit_fallback:
+        credits = reset_credit_fallback.get("credits")
+        print(f"fallback credits baked: {len(credits) if isinstance(credits, list) else 0}")
     if result.backup_path:
         print(f"backup: {result.backup_path}")
     if result.dry_run:

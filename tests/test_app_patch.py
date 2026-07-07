@@ -109,37 +109,53 @@ class AppPatchTests(unittest.TestCase):
     def test_patch_menu_chunk_supports_updated_bundle_symbols(self) -> None:
         patched = patch_menu_chunk("[" + _needle(2) + "]")
 
-        self.assertIn("Array.from({length:y}", patched)
+        self.assertIn("Array.from({length:Math.max(y,", patched)
         self.assertIn("(0,X.jsx)(m.Item", patched)
         self.assertIn("className:n(D&&", patched)
 
     def test_patch_menu_chunk_supports_current_bundle_symbols(self) -> None:
         patched = patch_menu_chunk("[" + _needle(3) + "]")
 
-        self.assertIn("Array.from({length:h}", patched)
+        self.assertIn("Array.from({length:Math.max(h,", patched)
         self.assertIn("(0,mG.jsx)(qd.Item", patched)
         self.assertIn("className:H(x&&", patched)
 
     def test_patch_menu_chunk_supports_remote_conversation_bundle_symbols(self) -> None:
         patched = patch_menu_chunk("[" + _needle(4) + "]")
 
-        self.assertIn("Array.from({length:h}", patched)
+        self.assertIn("Array.from({length:Math.max(h,", patched)
         self.assertIn("(0,Q.jsx)(k.Item", patched)
         self.assertIn("className:q(x&&", patched)
 
     def test_patch_menu_chunk_supports_thread_shell_bundle_symbols(self) -> None:
         patched = patch_menu_chunk("[" + _needle(5) + "]")
 
-        self.assertIn("Array.from({length:C}", patched)
+        self.assertIn("Array.from({length:Math.max(C,", patched)
         self.assertIn("(0,X.jsx)(b.Item", patched)
         self.assertIn("className:h(A&&", patched)
 
     def test_patch_menu_chunk_supports_keyboard_shortcuts_bundle_symbols(self) -> None:
         patched = patch_menu_chunk("[" + _needle(6) + "]")
 
-        self.assertIn("Array.from({length:h}", patched)
+        self.assertIn("Array.from({length:Math.max(h,", patched)
         self.assertIn("(0,K.jsx)(F.Item", patched)
         self.assertIn("className:L(x&&", patched)
+
+    def test_patch_menu_chunk_can_bake_reset_credit_fallback(self) -> None:
+        patched = patch_menu_chunk(
+            "[" + _needle() + "]",
+            reset_credit_fallback={
+                "credits": [
+                    {
+                        "title": "Full reset (Weekly + 5 hr)",
+                        "expires_at": "2026-07-31T19:52:32Z",
+                    }
+                ]
+            },
+        )
+
+        self.assertIn('"expires_at":"2026-07-31T19:52:32Z"', patched)
+        self.assertIn("fallback&&__codexResetCreditRender(fallback)", patched)
 
     def test_patch_menu_chunk_hides_rows_when_refresh_fails(self) -> None:
         patched = patch_menu_chunk("[" + _needle() + "]")
