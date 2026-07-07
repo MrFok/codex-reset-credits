@@ -90,8 +90,9 @@ class AppPatchTests(unittest.TestCase):
         self.assertIn("reset-credit-expiry", patched)
         self.assertIn('import(new URL(__codexResetCreditModule,import.meta.url).href)', patched)
         self.assertIn('.safeGet("/wham/rate-limit-reset-credits")', patched)
-        self.assertNotIn("https://chatgpt.com/backend-api/wham/rate-limit-reset-credits", patched)
-        self.assertNotIn('credentials:"include"', patched)
+        self.assertIn("https://chatgpt.com/backend-api/wham/rate-limit-reset-credits", patched)
+        self.assertIn('credentials:"include"', patched)
+        self.assertIn("__codexResetCreditsLastError", patched)
         self.assertIn('style:{display:"none"}', patched)
         self.assertIn("__codexResetCreditCacheKey", patched)
         self.assertIn("__codexResetCreditScheduleExpiry", patched)
@@ -143,10 +144,8 @@ class AppPatchTests(unittest.TestCase):
     def test_patch_menu_chunk_hides_rows_when_refresh_fails(self) -> None:
         patched = patch_menu_chunk("[" + _needle() + "]")
 
-        self.assertIn(
-            "catch(()=>cachedResponse?__codexResetCreditRender(cachedResponse):rows.forEach(__codexResetCreditHide))",
-            patched,
-        )
+        self.assertIn("catch(error=>{window.__codexResetCreditsLastError=String(error?.message||error)", patched)
+        self.assertIn("cachedResponse?__codexResetCreditRender(cachedResponse):rows.forEach(__codexResetCreditHide)", patched)
 
     def test_patch_menu_chunk_replaces_existing_patch(self) -> None:
         first = patch_menu_chunk("[" + _needle() + "]")
