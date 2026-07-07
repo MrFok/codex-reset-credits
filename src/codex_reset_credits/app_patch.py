@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import posixpath
 import re
@@ -23,6 +24,7 @@ PATCH_STARTS = (
     "(()=>{const __codexResetCreditModule=",
     "(()=>{const __codexResetCredits=",
 )
+CURRENT_PATCH_MARKERS = ("__codexResetCreditModule=", "__codexResetCreditCacheKey")
 RESET_CREDITS_ROUTE = "/wham/rate-limit-reset-credits"
 
 
@@ -32,6 +34,18 @@ class PatchResult:
     backup_path: Path | None
     changed: bool
     dry_run: bool
+
+
+@dataclass(frozen=True)
+class PatchStatus:
+    asar_path: Path
+    exists: bool
+    patched: bool
+    current: bool
+    sha256: str | None
+    mtime: float | None
+    would_update: bool | None
+    error: str | None = None
 
 
 @dataclass(frozen=True)
@@ -72,6 +86,61 @@ def patch_usage_menu(
 
     asar_path.write_bytes(replace_file(archive, menu_chunk_path, patched.encode("utf-8")))
     return PatchResult(asar_path=asar_path, backup_path=backup, changed=True, dry_run=False)
+
+
+def get_patch_status(asar_path: Path) -> PatchStatus:
+    if not asar_path.exists():
+        return PatchStatus(
+            asar_path=asar_path,
+            exists=False,
+            patched=False,
+            current=False,
+            sha256=None,
+            mtime=None,
+            would_update=None,
+            error="asar not found",
+        )
+
+    raw = asar_path.read_bytes()
+    patched = PATCH_MARKER.encode("utf-8") in raw
+    current = patched and all(marker.encode("utf-8") in raw for marker in CURRENT_PATCH_MARKERS)
+    try:
+        would_update = patch_usage_menu(asar_path, dry_run=True).changed
+        error = None
+    except Exception as exc:
+        would_update = None
+        error = str(exc)
+
+    stat = asar_path.stat()
+    return PatchStatus(
+        asar_path=asar_path,
+        exists=True,
+        patched=patched,
+        current=current,
+        sha256=hashlib.sha256(raw).hexdigest(),
+        mtime=stat.st_mtime,
+        would_update=would_update,
+        error=error,
+    )
+
+
+def ensure_usage_menu_patched(
+    asar_path: Path,
+    backup_path: Path | None = None,
+    dry_run: bool = False,
+    reset_credit_fallback: dict[str, Any] | None = None,
+) -> PatchResult:
+    status = get_patch_status(asar_path)
+    if not status.exists:
+        raise FileNotFoundError(status.error or f"asar not found: {asar_path}")
+    if status.current:
+        return PatchResult(asar_path=asar_path, backup_path=None, changed=False, dry_run=dry_run)
+    return patch_usage_menu(
+        asar_path,
+        backup_path=backup_path,
+        dry_run=dry_run,
+        reset_credit_fallback=reset_credit_fallback,
+    )
 
 
 def find_menu_chunk_path(archive: AsarFile) -> str:

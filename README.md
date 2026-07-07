@@ -9,10 +9,10 @@ why aren't they shown natively? no clue, but until it's addressed you can use th
 
 ![Codex reset credits demo](public/demo_img.png)
 
-`codex-reset-credits` is a small Python tool for checking how many Codex reset
-credits are available, when each credit expires, and when the current usage
-windows reset. It can also patch the Codex desktop "Usage remaining" menu to
-show those reset-credit expiry rows in the app.
+`codex-reset-credits` is a small CLI utility and Codex desktop patcher for
+checking how many Codex reset credits are available, when each credit expires,
+and when the current usage windows reset. It can also patch the Codex desktop
+"Usage remaining" menu to show those reset-credit expiry rows in the app.
 
 ## Features
 
@@ -56,6 +56,8 @@ Example commands:
 codex-reset-credits status
 codex-reset-credits status --json
 codex-reset-credits types
+codex-reset-credits patch-status
+codex-reset-credits ensure-patched --dry-run
 codex-reset-credits patch-app --dry-run
 ```
 
@@ -101,11 +103,12 @@ Patch the Codex desktop app menu to show live reset-credit expiry rows.
 codex-reset-credits patch-app
 ```
 
-The patch installs a live in-app fetcher. It does not bake the current reset
-credits into the bundle; when Codex renders the usage menu, the injected rows
-reuse Codex desktop's authenticated API client to request
-`/wham/rate-limit-reset-credits` and populate from the current response. If that
-request fails, the extra reset rows stay hidden.
+The patch installs a live in-app fetcher. When Codex renders the usage menu, the
+injected rows reuse Codex desktop's authenticated API client to request
+`/wham/rate-limit-reset-credits` and populate from the current response. When
+available at patch time, the command also bakes the current reset-credit
+response as a fallback so rows can render before the live in-app request
+finishes.
 
 The in-app fetcher caches the last successful reset-credit response so the rows
 render immediately on later menu opens. It refreshes on first load, shortly
@@ -116,6 +119,40 @@ Always dry-run first:
 
 ```bash
 codex-reset-credits patch-app --dry-run
+```
+
+### `patch-status`
+
+Run the read-only patch status command to check whether the Codex desktop app
+bundle currently contains the reset-credit menu patch:
+
+```bash
+codex-reset-credits patch-status
+```
+
+The command is read-only. It reports whether the target `app.asar` exists,
+whether the patch marker is present, the bundle hash, the bundle modification
+time, whether `ensure-patched` would update it, and whether a low-level
+`patch-app --dry-run` would update it.
+
+### `ensure-patched`
+
+Run the idempotent one-shot repair command to reapply the Codex desktop app
+patch only when the target bundle is unpatched or stale:
+
+```bash
+codex-reset-credits ensure-patched
+```
+
+Use this after Codex desktop updates, since updates can replace the patched
+`app.asar` with a fresh bundle. If the patch is already present, the command
+does not rewrite the app bundle. If it applies the patch, fully quit and reopen
+Codex desktop so the running app loads the updated ASAR.
+
+Preview without writing:
+
+```bash
+codex-reset-credits ensure-patched --dry-run
 ```
 
 Patch a non-default `app.asar`:
@@ -187,9 +224,10 @@ PYTHONPATH=src python3 -m codex_reset_credits.cli status
 PYTHONPATH=src python3 -m unittest discover -s tests
 ```
 
-Do not print or log `~/.codex/auth.json`. `patch-app` no longer needs to read
-live reset-credit data at install time; it only modifies the local app bundle.
-Use `patch-app --dry-run` before modifying any Codex desktop `app.asar`.
+Do not print or log `~/.codex/auth.json`. `patch-app` may read live
+reset-credit data at install time to bake a fallback response, but it must not
+print tokens. Use `patch-app --dry-run` before modifying any Codex desktop
+`app.asar`.
 
 ## Notes
 

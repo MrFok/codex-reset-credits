@@ -1,12 +1,15 @@
+import tempfile
 import unittest
 from pathlib import Path
 
-from codex_reset_credits.asar import AsarFile, iter_file_paths
+from codex_reset_credits.asar import AsarFile, _pack_header, iter_file_paths
 from codex_reset_credits.app_patch import (
     ResetCreditApiClient,
     _reset_row_needles,
+    ensure_usage_menu_patched,
     find_menu_chunk_path,
     find_reset_credit_api_client,
+    get_patch_status,
     patch_menu_chunk,
 )
 
@@ -67,6 +70,92 @@ class AppPatchTests(unittest.TestCase):
         archive.header["files"]["webview"]["files"]["assets"]["files"]["virtual.js"] = {"size": 10}
 
         self.assertEqual(list(iter_file_paths(archive)), ["webview/assets/app.js"])
+
+    def test_get_patch_status_reports_missing_asar(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            status = get_patch_status(Path(temp_dir) / "missing.asar")
+
+        self.assertFalse(status.exists)
+        self.assertFalse(status.patched)
+        self.assertFalse(status.current)
+        self.assertIsNone(status.sha256)
+        self.assertIsNone(status.mtime)
+        self.assertIsNone(status.would_update)
+        self.assertEqual(status.error, "asar not found")
+
+    def test_get_patch_status_reports_unpatched_asar(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            asar_path = _write_test_asar(Path(temp_dir) / "app.asar")
+            status = get_patch_status(asar_path)
+
+        self.assertTrue(status.exists)
+        self.assertFalse(status.patched)
+        self.assertFalse(status.current)
+        self.assertEqual(len(status.sha256 or ""), 64)
+        self.assertIsNotNone(status.mtime)
+        self.assertTrue(status.would_update)
+        self.assertIsNone(status.error)
+
+    def test_get_patch_status_reports_patched_asar(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            asar_path = _write_test_asar(Path(temp_dir) / "app.asar")
+            ensure_usage_menu_patched(asar_path)
+            status = get_patch_status(asar_path)
+
+        self.assertTrue(status.exists)
+        self.assertTrue(status.patched)
+        self.assertTrue(status.current)
+        self.assertFalse(status.would_update)
+        self.assertIsNone(status.error)
+
+    def test_ensure_usage_menu_patched_dry_run_does_not_write(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            asar_path = _write_test_asar(Path(temp_dir) / "app.asar")
+            before = asar_path.read_bytes()
+            result = ensure_usage_menu_patched(asar_path, dry_run=True)
+            after = asar_path.read_bytes()
+
+        self.assertTrue(result.changed)
+        self.assertTrue(result.dry_run)
+        self.assertEqual(after, before)
+        self.assertNotIn(b"reset-credit-expiry", after)
+
+    def test_ensure_usage_menu_patched_is_idempotent_when_already_patched(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            asar_path = _write_test_asar(Path(temp_dir) / "app.asar")
+            ensure_usage_menu_patched(asar_path)
+            before = asar_path.read_bytes()
+            result = ensure_usage_menu_patched(asar_path)
+            after = asar_path.read_bytes()
+
+        self.assertFalse(result.changed)
+        self.assertFalse(result.dry_run)
+        self.assertEqual(after, before)
+
+    def test_ensure_usage_menu_patched_repairs_stale_static_patch(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            asar_path = _write_test_asar(Path(temp_dir) / "app.asar", patched=True)
+            before_status = get_patch_status(asar_path)
+            result = ensure_usage_menu_patched(asar_path)
+            after_status = get_patch_status(asar_path)
+
+        self.assertTrue(before_status.patched)
+        self.assertFalse(before_status.current)
+        self.assertTrue(result.changed)
+        self.assertTrue(after_status.current)
+
+    def test_ensure_usage_menu_patched_applies_patch_once(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            asar_path = _write_test_asar(Path(temp_dir) / "app.asar")
+            result = ensure_usage_menu_patched(asar_path)
+            status = get_patch_status(asar_path)
+            patched = asar_path.read_bytes()
+
+        self.assertTrue(result.changed)
+        self.assertFalse(result.dry_run)
+        self.assertTrue(status.patched)
+        self.assertTrue(status.current)
+        self.assertIn(b"reset-credit-expiry", patched)
 
     def test_find_reset_credit_api_client_uses_exported_codex_client(self) -> None:
         archive = _archive_with_files(
@@ -219,6 +308,44 @@ def _archive_with_files(files: dict[str, bytes]) -> AsarFile:
         children[parts[-1]] = {"offset": str(len(raw)), "size": len(content)}
         raw += content
     return AsarFile(Path("test.asar"), 0, 0, 0, header, 0, raw)
+
+
+def _write_test_asar(path: Path, patched: bool = False) -> Path:
+    menu = "onRateLimitResetClick [" + _needle()
+    if patched:
+        menu += (
+            ',(()=>{const __codexResetCredits=[{"title":"Full reset",'
+            '"expires_at":"2026-07-18T00:31:22.905095Z"}];'
+            "/* reset-credit-expiry */return __codexResetCredits})()"
+        )
+    menu += "]"
+    path.write_bytes(
+        _asar_bytes(
+            {
+                "webview/assets/menu.js": menu.encode("utf-8"),
+                "webview/assets/api-hash.js": (
+                    b"function RSt(){return HM.safeGet(`/wham/rate-limit-reset-credits`)}"
+                    b"export{HM as PA,LSt as Sc};"
+                ),
+            }
+        )
+    )
+    return path
+
+
+def _asar_bytes(files: dict[str, bytes]) -> bytes:
+    header: dict[str, object] = {"files": {}}
+    raw = b""
+    for path, content in files.items():
+        node = header
+        parts = path.split("/")
+        for part in parts[:-1]:
+            children = node.setdefault("files", {})
+            node = children.setdefault(part, {"files": {}})
+        children = node.setdefault("files", {})
+        children[parts[-1]] = {"offset": str(len(raw)), "size": len(content)}
+        raw += content
+    return _pack_header(header) + raw
 
 
 if __name__ == "__main__":
