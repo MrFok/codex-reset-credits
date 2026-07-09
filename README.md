@@ -1,5 +1,7 @@
 # codex-reset-credits
 
+### UPDATE: Codex/ChatGPT has been updated so the reset credit times are now visible for all users. I hope this helped the handful of people before the update :)
+
 did you know your reset credits have expiration dates? 
 
 see your Codex usage windows and reset-credit expiration times from the command
